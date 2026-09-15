@@ -1,0 +1,41 @@
+{
+  "name": "sakanaa-whatswap",
+  "version": "2.0.0",
+  "description": "Production-grade, resilient, and Termux-compatible WhatsApp multi-device library wrapping Baileys v7",
+  "main": "index.js",
+  "type": "module",
+  "exports": {
+    ".": "./index.js"
+  },
+  "scripts": {
+    "test": "node --check index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "baileys",
+    "termux",
+    "bot",
+    "whatsapp-bot",
+    "sakanaa",
+    "multi-device"
+  ],
+  "author": "Sakanaa Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SakanaaDesuKa/sakanaa-whatswap.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SakanaaDesuKa/sakanaa-whatswap/issues"
+  },
+  "homepage": "https://github.com/SakanaaDesuKa/sakanaa-whatswap#readme",
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "node-webpmux": "^3.2.1",
+    "pino": "^9.6.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
