@@ -21,7 +21,7 @@ import { GroupMetadataCache, groupMetadataCache as defaultGroupMetadataCache } f
 import { RateLimiter, rateLimiter as defaultRateLimiter } from '../messaging/rateLimiter.js';
 import { MediaProcessor, mediaProcessor as defaultMediaProcessor } from '../messaging/mediaProcessor.js';
 import { MessageBuilder, messageBuilder as defaultMessageBuilder } from '../messaging/messageBuilder.js';
-import { toPnJid, jidNormalizedUser } from '../identity/jidUtils.js';
+import { toPnJid, toLidJid, jidNormalizedUser, normalizeJid, extractPhoneNumber, extractSenderInfo } from '../identity/jidUtils.js';
 
 class RetryCounterCache {
   constructor(ttlMs = 300_000) {
@@ -693,6 +693,10 @@ export class BaileysConnection extends EventEmitter {
   // CONVENIENCE IDENTITY METHODS
   // ==========================================
 
+  normalizeJid(jid) {
+    return normalizeJid(jid);
+  }
+
   async convertPn(pnJidOrNumber) {
     return this.lidPnResolver.convertPn(pnJidOrNumber, this.sock);
   }
@@ -703,6 +707,48 @@ export class BaileysConnection extends EventEmitter {
 
   async resolveIdentity(jidOrNumber) {
     return this.lidPnResolver.resolveIdentity(jidOrNumber, this.sock);
+  }
+
+  /**
+   * Fast synchronous extraction of sender information from a Baileys message.
+   * Extracts clean PN, LID, and candidate JIDs from key and participant fields.
+   * @param {object} m - Baileys message object
+   * @returns {{ senderPn: string, senderLid: string, pnJid: string, lidJid: string, cleanPn: string, remoteJid: string, isGroup: boolean, isNewsletter: boolean, fromMe: boolean }}
+   */
+  extractSender(m) {
+    return extractSenderInfo(m);
+  }
+
+  /**
+   * Deep asynchronous resolution of sender identity.
+   * Extracts available candidates, resolves missing PN or LID via cache/repository/network,
+   * and registers learned mappings into the identity resolver.
+   * @param {object} m - Baileys message object
+   * @returns {Promise<{ senderPn: string, senderLid: string, pnJid: string, lidJid: string, cleanPn: string, remoteJid: string, isGroup: boolean, isNewsletter: boolean, fromMe: boolean }>}
+   */
+  async resolveSender(m) {
+    const info = extractSenderInfo(m);
+
+    if (!info.pnJid && info.lidJid) {
+      const pn = await this.convertLid(info.lidJid);
+      if (pn) {
+        info.pnJid = pn;
+        info.senderPn = extractPhoneNumber(pn);
+        info.cleanPn = info.senderPn;
+      }
+    } else if (info.pnJid && !info.lidJid) {
+      const lid = await this.convertPn(info.pnJid);
+      if (lid) {
+        info.lidJid = lid;
+        info.senderLid = lid;
+      }
+    }
+
+    if (info.pnJid && info.lidJid) {
+      this.lidPnResolver.registerMapping(info.pnJid, info.lidJid).catch(() => {});
+    }
+
+    return info;
   }
 
   // ==========================================

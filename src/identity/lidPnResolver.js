@@ -12,6 +12,7 @@ import {
   isJidNewsletter,
   isJidMetaAI,
   toPnJid,
+  toLidJid,
   extractPhoneNumber,
 } from './jidUtils.js';
 import { logger as defaultLogger } from '../core/logger.js';
@@ -66,10 +67,10 @@ export class LidPnResolver {
    */
   async registerMapping(rawPn, rawLid) {
     if (!rawPn || !rawLid) return;
-    const pn = jidNormalizedUser(rawPn);
-    const lid = jidNormalizedUser(rawLid);
+    const pn = toPnJid(rawPn);
+    const lid = toLidJid(rawLid);
 
-    if (!isPnUser(pn) || !isLidUser(lid)) return;
+    if (!pn || !lid) return;
 
     this.pnToLid.set(pn, lid);
     this.lidToPn.set(lid, pn);
@@ -87,6 +88,7 @@ export class LidPnResolver {
   async convertPn(pnJidOrNumber, sock) {
     if (!pnJidOrNumber) return null;
     const pn = toPnJid(pnJidOrNumber);
+    if (!pn) return null;
 
     // Tier 1: Local In-Memory Cache & Adapter
     if (this.pnToLid.has(pn)) {
@@ -103,9 +105,11 @@ export class LidPnResolver {
       try {
         const lid = await sock.signalRepository.lidMapping.getLIDForPN(pn);
         if (lid) {
-          const normLid = jidNormalizedUser(lid);
-          await this.registerMapping(pn, normLid);
-          return normLid;
+          const normLid = toLidJid(lid);
+          if (normLid) {
+            await this.registerMapping(pn, normLid);
+            return normLid;
+          }
         }
       } catch (err) {
         this.logger.debug('AUTH', `LID lookup via signalRepository gagal: ${err.message}`);
@@ -116,11 +120,15 @@ export class LidPnResolver {
     if (sock && typeof sock.onWhatsApp === 'function') {
       try {
         const num = extractPhoneNumber(pn);
-        const [res] = await sock.onWhatsApp(num);
-        if (res?.exists && res.lid) {
-          const normLid = jidNormalizedUser(res.lid);
-          await this.registerMapping(pn, normLid);
-          return normLid;
+        if (num) {
+          const [res] = await sock.onWhatsApp(num);
+          if (res?.exists && res.lid) {
+            const normLid = toLidJid(res.lid);
+            if (normLid) {
+              await this.registerMapping(pn, normLid);
+              return normLid;
+            }
+          }
         }
       } catch (err) {
         this.logger.debug('AUTH', `onWhatsApp lookup gagal: ${err.message}`);
@@ -138,7 +146,8 @@ export class LidPnResolver {
    */
   async convertLid(rawLid, sock) {
     if (!rawLid) return null;
-    const lid = jidNormalizedUser(rawLid);
+    const lid = toLidJid(rawLid);
+    if (!lid) return null;
 
     // Tier 1: Local In-Memory Cache & Adapter
     if (this.lidToPn.has(lid)) {
@@ -155,9 +164,11 @@ export class LidPnResolver {
       try {
         const pn = await sock.signalRepository.lidMapping.getPNForLID(lid);
         if (pn) {
-          const normPn = jidNormalizedUser(pn);
-          await this.registerMapping(normPn, lid);
-          return normPn;
+          const normPn = toPnJid(pn);
+          if (normPn) {
+            await this.registerMapping(normPn, lid);
+            return normPn;
+          }
         }
       } catch (err) {
         this.logger.debug('AUTH', `PN lookup via signalRepository gagal: ${err.message}`);
