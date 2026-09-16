@@ -35,6 +35,14 @@
 npm install github:SakanaaDesuKa/sakanaa-whatswap
 ```
 
+> [!TIP]
+> **Catatan untuk Pterodactyl / Node.js 24+ (Error `EALLOWGIT`):**  
+> Pada versi npm terbaru (npm 12+), pengambilan dependensi dari GitHub dibatasi secara *default* oleh kebijakan keamanan `EALLOWGIT`. Agar dapat mengunduh library, buat berkas **`.npmrc`** di direktori utama bot Anda (sejajar dengan `package.json`) berisi:
+> ```ini
+> allow-git=all
+> ```
+> Atau set variabel lingkungan pada tab **Startup** Pterodactyl: `NPM_CONFIG_ALLOW_GIT=all`.
+
 ### Prasyarat Sistem:
 - **Node.js**: Versi `≥ 20.0.0` (ESM murni)
 - **FFmpeg & FFprobe**: Tersedia di PATH sistem untuk pemrosesan media.

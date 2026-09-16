@@ -107,6 +107,7 @@ export class BaileysConnection extends EventEmitter {
     this.isManualDisconnect = false;
     this.isReconnecting = false;
     this.pairingRequested = false;
+    this.pairingPromise = null;
     this.isNewLogin = false;
     this.isPairingAuth = false;
     this.consecutive401s = 0;
@@ -215,12 +216,22 @@ export class BaileysConnection extends EventEmitter {
     this.authType = 'pairing';
     this.isPairingAuth = true;
     this.pairingRequested = false;
+    this.pairingPromise = null;
     this.pairingNumber = String(phoneNumber || '').replace(/\D/g, '');
     if (!this.pairingNumber) {
       throw new Error('Nomor telepon pairing tidak valid.');
     }
     this.options = { ...this.options, ...opts };
-    return this._initConnection();
+    await this._initConnection();
+
+    if (this.authState?.creds?.registered) {
+      return null;
+    }
+
+    if (this.pairingPromise) {
+      return await this.pairingPromise;
+    }
+    return null;
   }
 
   /**
@@ -335,22 +346,58 @@ export class BaileysConnection extends EventEmitter {
     ) {
       this.pairingRequested = true;
       this.logger.info('AUTH', `Menyiapkan permintaan Pairing Code untuk +${this.pairingNumber}...`);
-
-      setTimeout(async () => {
-        try {
-          if (this.authState?.creds?.registered) return;
-          const rawCode = await this.sock.requestPairingCode(this.pairingNumber);
-          const formattedCode = rawCode?.match(/.{1,4}/g)?.join('-') || rawCode;
-          this.logger.success('AUTH', `KODE PAIRING WHATSAPP: ${formattedCode}`);
-          this.emit('pairing-code', formattedCode);
-        } catch (err) {
-          this.logger.error('AUTH', `Gagal meminta pairing code: ${err.message}`);
-          this.pairingRequested = false;
-        }
-      }, 3000);
+      this.pairingPromise = this._requestPairingCodeWithRetry();
     }
 
     this.isConnecting = false;
+  }
+
+  /**
+   * Request pairing code with WebSocket readiness detection and automatic retries.
+   */
+  async _requestPairingCodeWithRetry(maxAttempts = 4, delayMs = 3000) {
+    if (this.authState?.creds?.registered) return null;
+
+    const waitForWs = async (timeoutMs = 12000) => {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        if (this.sock?.ws?.readyState === 1) return true; // WebSocket.OPEN
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      return Boolean(this.sock?.ws?.readyState === 1);
+    };
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        if (this.authState?.creds?.registered) return null;
+
+        // Wait until WebSocket is actively open
+        await waitForWs(12000);
+
+        // Grace period for noise handshake completion
+        await new Promise((r) => setTimeout(r, 1500));
+
+        if (this.authState?.creds?.registered) return null;
+
+        const rawCode = await this.sock.requestPairingCode(this.pairingNumber);
+        const formattedCode = rawCode?.match(/.{1,4}/g)?.join('-') || rawCode;
+        this.logger.success('AUTH', `KODE PAIRING WHATSAPP: ${formattedCode}`);
+        this.emit('pairing-code', formattedCode);
+        return formattedCode;
+      } catch (err) {
+        if (this.authState?.creds?.registered) return null;
+        this.logger.warn('AUTH', `Percobaan ${attempt}/${maxAttempts} meminta pairing code: ${err.message}`);
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, delayMs * attempt));
+        } else {
+          this.logger.error('AUTH', `Gagal meminta pairing code setelah ${maxAttempts} percobaan: ${err.message}`);
+          this.pairingRequested = false;
+          this.emit('pairing-error', err);
+          return null;
+        }
+      }
+    }
+    return null;
   }
 
   /**
