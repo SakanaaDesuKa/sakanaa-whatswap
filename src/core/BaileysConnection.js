@@ -310,6 +310,7 @@ export class BaileysConnection extends EventEmitter {
     };
 
     this.sock = makeWASocket(socketConfig);
+    this.sock.messageCache = this.messageCache;
 
     // Guard WebSocket
     if (this.sock.ws) {

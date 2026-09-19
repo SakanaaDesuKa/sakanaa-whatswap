@@ -36,6 +36,14 @@ export class MessageBuilder {
     try {
       const result = await sock.sendMessage(jid, content, opts);
       this.rateLimiter.recordSuccess(jid);
+
+      // Cache outgoing message into socket/connection messageCache for editMessage and getMessage
+      if (result?.key?.id && result?.message) {
+        if (sock.messageCache?.set && typeof sock.messageCache.set === 'function') {
+          sock.messageCache.set(result.key.id, result.message);
+        }
+      }
+
       return result;
     } catch (err) {
       this.rateLimiter.recordFailure(jid, err);
@@ -556,7 +564,10 @@ export class MessageBuilder {
   }
 
   /**
-   * Edit an existing sent message (supports text, media like image/video with caption, or caption updates).
+   * Edit an existing sent message.
+   * Supports plain text edit, new media replacement (image, video, audio, document) with caption,
+   * and native caption editing for existing media messages without re-uploading media.
+   *
    * @param {object} sock
    * @param {string} jid
    * @param {object} key - Target message key { id, remoteJid, fromMe, participant }
@@ -568,47 +579,110 @@ export class MessageBuilder {
       throw new Error('Key pesan yang akan diedit wajib disertakan (memiliki id).');
     }
 
-    let payload = {};
+    const targetJid = jidNormalizedUser(jid);
 
+    // Normalize content
+    let editContent = {};
     if (typeof content === 'string') {
-      payload = {
-        text: content,
-        edit: key,
-      };
+      editContent = { text: content };
     } else if (content && typeof content === 'object') {
-      const editContent = { ...content };
-
-      // Handle media if provided as string path or URL
-      if (editContent.image && typeof editContent.image === 'string') {
-        editContent.image = await this.mediaProcessor.toBuffer(editContent.image);
-      }
-      if (editContent.video && typeof editContent.video === 'string') {
-        const processed = await this.mediaProcessor.processVideo(editContent.video);
-        editContent.video = processed.buffer;
-        editContent.mimetype = processed.mimetype || editContent.mimetype || 'video/mp4';
-      }
-      if (editContent.audio && typeof editContent.audio === 'string') {
-        editContent.audio = await this.mediaProcessor.toBuffer(editContent.audio);
-      }
-      if (editContent.document && typeof editContent.document === 'string') {
-        editContent.document = await this.mediaProcessor.toBuffer(editContent.document);
-      }
-
-      // If only caption is provided without explicit media or text, map caption to text so Baileys does not fail
-      if (editContent.caption && !editContent.text && !editContent.image && !editContent.video && !editContent.audio && !editContent.document) {
-        editContent.text = editContent.caption;
-      }
-
-      payload = {
-        ...editContent,
-        edit: key,
-        ...opts.contentOptions,
-      };
+      editContent = { ...content };
     } else {
       throw new Error('Konten edit pesan harus berupa string atau object.');
     }
 
-    return this._sendWithLimit(sock, jid, payload, opts);
+    // Process media if provided
+    if (editContent.image && typeof editContent.image === 'string') {
+      editContent.image = await this.mediaProcessor.toBuffer(editContent.image);
+    }
+    if (editContent.video && typeof editContent.video === 'string') {
+      const processed = await this.mediaProcessor.processVideo(editContent.video);
+      editContent.video = processed.buffer;
+      editContent.mimetype = processed.mimetype || editContent.mimetype || 'video/mp4';
+    }
+    if (editContent.audio && typeof editContent.audio === 'string') {
+      editContent.audio = await this.mediaProcessor.toBuffer(editContent.audio);
+    }
+    if (editContent.document && typeof editContent.document === 'string') {
+      editContent.document = await this.mediaProcessor.toBuffer(editContent.document);
+    }
+
+    const hasNewMedia = Boolean(editContent.image || editContent.video || editContent.audio || editContent.document);
+
+    // 1. If new media file is provided (e.g. { image: ..., caption: ... }), send full media edit
+    if (hasNewMedia) {
+      const payload = {
+        ...editContent,
+        edit: key,
+        ...opts.contentOptions,
+      };
+      return this._sendWithLimit(sock, targetJid, payload, opts);
+    }
+
+    // 2. If only caption or text is provided, check if the original message was a media message
+    const captionOrText = editContent.caption !== undefined ? editContent.caption : editContent.text;
+    const originalMessage =
+      opts.originalMessage ||
+      (sock?.messageCache?.get && sock.messageCache.get(key.id)) ||
+      (sock?.loadMessage && (await sock.loadMessage(key.id).catch(() => null))) ||
+      (sock?.getMessage && (await sock.getMessage(key).catch(() => null)));
+
+    if (originalMessage && typeof originalMessage === 'object') {
+      const mediaType = Object.keys(originalMessage).find((k) =>
+        ['imageMessage', 'videoMessage', 'documentMessage'].includes(k)
+      );
+
+      if (mediaType && originalMessage[mediaType]) {
+        // Native WhatsApp media caption edit protocol without re-uploading media
+        const updatedMedia = {
+          ...originalMessage[mediaType],
+          caption: String(captionOrText || ''),
+        };
+
+        const editProtocol = {
+          protocolMessage: {
+            key,
+            type: 14, // proto.Message.ProtocolMessage.Type.MESSAGE_EDIT
+            editedMessage: {
+              [mediaType]: updatedMedia,
+            },
+            timestampMs: Date.now(),
+          },
+        };
+
+        await this.rateLimiter.acquire(targetJid);
+        try {
+          const res = await sock.relayMessage(targetJid, editProtocol, {
+            messageId: sock.generateMessageTag ? sock.generateMessageTag() : undefined,
+            additionalAttributes: { edit: '1' },
+            ...opts.relayOptions,
+          });
+          this.rateLimiter.recordSuccess(targetJid);
+
+          // Update messageCache with edited media message
+          if (sock.messageCache?.set) {
+            sock.messageCache.set(key.id, {
+              ...originalMessage,
+              [mediaType]: updatedMedia,
+            });
+          }
+
+          return res;
+        } catch (err) {
+          this.rateLimiter.recordFailure(targetJid, err);
+          throw err;
+        }
+      }
+    }
+
+    // 3. Fallback: Standard plain text edit
+    const payload = {
+      text: String(captionOrText || ''),
+      edit: key,
+      ...opts.contentOptions,
+    };
+
+    return this._sendWithLimit(sock, targetJid, payload, opts);
   }
 
   // Alias for editMessage

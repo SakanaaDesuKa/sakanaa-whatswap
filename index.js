@@ -59,6 +59,7 @@ import {
   Carousel,
   AIRich,
   Toolkit,
+  VERSION,
   VERSION as interactiveVersion,
 } from './src/builder/MessageBuilder.js';
 
@@ -95,6 +96,7 @@ export {
   Carousel,
   AIRich,
   Toolkit,
+  VERSION,
   interactiveVersion,
 
   // Sticker Engine & Watermark (stickerLib)

@@ -156,7 +156,7 @@ client.on('messages.upsert', async ({ messages }) => {
     await delay(2000);
 
     // 7. Menggabungkan Konten dari Instance AIRich Lain (HScroll Layout)
-    rich.addText('Anda juga dapat menyusun konten di instance AIRich terpisah lalu menggabungkannya:', {
+    rich.addText('Anda juga dapat menyusun konten di instance AIRich terpisah lalu menggunakan kembali itemnya:', {
       insertAt: 'table1',
       id: 'mix_intro',
     });
@@ -166,7 +166,7 @@ client.on('messages.upsert', async ({ messages }) => {
 
     const subItems = new AIRich(conn)
       .addProduct({
-        title: 'Produk Layanan',
+        title: 'Produk Layanan Bot',
         brand: 'Sakanaa',
         price: 'Gratis / Open Source',
         product_url: 'https://example.com/product',
@@ -174,25 +174,117 @@ client.on('messages.upsert', async ({ messages }) => {
       })
       .addPost({
         profile: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
-        title: 'Fitur Terintegrasi',
-        username: 'sakanaa_bot',
+        title: 'Di Balik Layar',
+        username: 'sakanaa.app',
         verified: true,
-        caption: 'Disusun di instance terpisah dan digabungkan ke pesan utama.',
+        caption: 'Disusun secara terpisah, lalu digabungkan ke pesan utama.',
         thumbnail: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500',
         url: 'https://example.com/post',
         source_app: 'INSTAGRAM',
       })
-      .items;
+      .addReels({
+        profile: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
+        username: 'sakanaa.app',
+        thumbnail: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500',
+        url: 'https://example.com/reel',
+        verified: true,
+      }).items;
+
+    rich.addText('Kartu-kartu di bawah ini berasal dari instance AIRich yang terpisah sepenuhnya.', {
+      insertAt: 'mix_intro',
+      id: 'mix_note',
+    });
+
+    await rich.sendEdit();
+    await delay(1500);
 
     rich.addSection(AIRich.newLayout('HScroll', subItems), {
-      insertAt: 'mix_intro',
+      insertAt: 'mix_note',
       id: 'mixed_items',
     });
 
     await rich.sendEdit();
+    await delay(3000);
+
+    // 8. Komponen Tip
+    rich.addTip(
+      'Produk, Post, dan Reels di atas dibuat terpisah, diekstrak dengan .items, lalu dimasukkan ke sini menggunakan .addSection().',
+      { insertAt: 'mixed_items', id: 'mix_explain' }
+    );
+
+    await rich.sendEdit();
     await delay(2500);
 
-    // 8. Widget & Tombol Footer
+    // 9. Lanjutkan Penyusunan di Bawah Bagian Mixed
+    rich.addText('Anda dapat terus menyusun konten di bawah bagian yang digabungkan secara normal.', {
+      insertAt: 'mix_explain',
+      id: 'after_mix',
+    });
+
+    await rich.sendEdit();
+    await delay(1800);
+
+    // 10. Kartu Sumber Tautan (Source Cards)
+    rich.addSource(
+      [
+        {
+          icon: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
+          url: 'https://example.com/docs',
+          title: 'Dokumentasi Resmi',
+          subtitle: 'Panduan Lengkap Interactive Message',
+        },
+      ],
+      {
+        insertAt: 'after_mix',
+        id: 'source1',
+      }
+    );
+
+    await rich.sendEdit();
+    await delay(1800);
+
+    // 11. Multi-Item Reels Carousel
+    rich.addReels(
+      [
+        {
+          profile: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
+          username: 'sakanaa.app',
+          thumbnail: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500',
+          url: 'https://example.com/reel1',
+          verified: true,
+        },
+        {
+          profile: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
+          username: 'sakanaa.app',
+          thumbnail: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500',
+          url: 'https://example.com/reel2',
+          verified: true,
+        },
+        {
+          profile: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
+          username: 'sakanaa.app',
+          thumbnail: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500',
+          url: 'https://example.com/reel3',
+          verified: true,
+        },
+        {
+          profile: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
+          username: 'sakanaa.app',
+          thumbnail: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500',
+          url: 'https://example.com/reel4',
+          verified: true,
+        },
+      ],
+      {
+        insertAt: 'source1',
+        id: 'reels1',
+      }
+    );
+
+    await rich.sendEdit();
+    await delay(2200);
+
+    // 12. Widget Aksi Cepat
     rich.addWidget(
       {
         title: 'Aksi Cepat',
@@ -207,11 +299,15 @@ client.on('messages.upsert', async ({ messages }) => {
         ],
       },
       {
-        insertAt: 'mixed_items',
+        insertAt: 'reels1',
         id: 'widget1',
       }
     );
 
+    await rich.sendEdit();
+    await delay(2000);
+
+    // 13. Tombol Aksi Footer
     rich.addFooterAction(
       {
         text: 'Kunjungi Website',
@@ -223,13 +319,27 @@ client.on('messages.upsert', async ({ messages }) => {
     );
 
     await rich.sendEdit();
-    await delay(2000);
+    await delay(2500);
 
-    // 9. Pesan Penutup
-    rich.addText('Selesai! Pesan interaktif lengkap berhasil dibangun dan diperbarui secara dinamis. 🚀', {
-      insertAt: 'widget1',
-      id: 'final',
-    });
+    // 14. Metadata Sementara & Penghapusan Dinamis (Dynamic Delete)
+    rich.addMetadata(
+      'Itulah alur kerja dasarnya: buat, sisipkan, ganti (replace), gabungkan (mix), dan terus bangun ke bawah dalam satu pesan yang dapat diedit.',
+      { id: 'cleanup_intro', insertAt: 'reels1' }
+    );
+
+    await rich.sendEdit();
+    await delay(3000);
+
+    // Hapus bagian sementara secara dinamis
+    rich.delete('cleanup_intro');
+    await rich.sendEdit();
+    await delay(400);
+
+    // 15. Pesan Penutup
+    rich.addText(
+      'Selesai! Itulah seluruh demonstrasi Interactive Message Builder — dibuat langsung secara live, diedit langsung di obrolan, dan digabungkan dari instance terpisah. 🚀',
+      { insertAt: 'widget1', id: 'final' }
+    );
 
     await rich.sendEdit();
   }

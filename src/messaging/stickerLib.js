@@ -200,10 +200,28 @@ function normalizeWatermark(options = {}) {
 function getScaleCropFilter(aspect = '1:1') {
   if (aspect === 'auto') {
     // Keep original aspect ratio within 512x512
-    return "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease";
+    return 'scale=512:512:force_original_aspect_ratio=decrease';
   }
   // 1:1 square crop: crop first to center 1:1, scale to 512x512
   return 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512';
+}
+
+/**
+ * Searches for an available system font file on Android/Termux or Linux VPS.
+ * @returns {string|null}
+ */
+function getSystemFontFile() {
+  const candidates = [
+    '/system/fonts/Roboto-Regular.ttf',
+    '/system/fonts/DroidSans.ttf',
+    '/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    '/usr/share/fonts/TTF/DejaVuSans.ttf',
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
 }
 
 /**
@@ -215,6 +233,18 @@ function escapeFfmpegText(str) {
     .replace(/'/g, "'\\\\\\''")
     .replace(/:/g, '\\:')
     .replace(/%/g, '%%');
+}
+
+/**
+ * Builds the drawtext filter string for watermark text at bottom-right corner.
+ */
+function buildTextWatermarkFilter(wm) {
+  const escaped = escapeFfmpegText(wm.text);
+  const opacity = Math.min(Math.max(Number(wm.opacity) || 0.85, 0.1), 1.0);
+  const color = wm.color || 'white';
+  const fontFile = getSystemFontFile();
+  const fontOption = fontFile ? `:fontfile='${fontFile}'` : '';
+  return `drawtext=text='${escaped}'${fontOption}:fontsize=16:fontcolor=${color}@${opacity}:shadowcolor=black@0.7:shadowx=1:shadowy=1:x=w-tw-15:y=h-th-15`;
 }
 
 /**
@@ -243,10 +273,7 @@ async function imageToWebp(inputPath, options = {}) {
       );
     } else if (wm.type === 'text') {
       // Text watermark: crop first, then draw text at bottom-right corner
-      const escaped = escapeFfmpegText(wm.text);
-      const opacity = Math.min(Math.max(Number(wm.opacity) || 0.85, 0.1), 1.0);
-      const color = wm.color || 'white';
-      const textFilter = `drawtext=text='${escaped}':fontsize=16:fontcolor=${color}@${opacity}:shadowcolor=black@0.7:shadowx=1:shadowy=1:x=w-tw-15:y=h-th-15`;
+      const textFilter = buildTextWatermarkFilter(wm);
 
       args.push(
         '-vcodec', 'libwebp',
@@ -318,10 +345,7 @@ async function videoToWebp(inputPath, fps = 15, duration = 8, options = {}) {
         outPath
       );
     } else if (wm.type === 'text') {
-      const escaped = escapeFfmpegText(wm.text);
-      const opacity = Math.min(Math.max(Number(wm.opacity) || 0.85, 0.1), 1.0);
-      const color = wm.color || 'white';
-      const textFilter = `drawtext=text='${escaped}':fontsize=16:fontcolor=${color}@${opacity}:shadowcolor=black@0.7:shadowx=1:shadowy=1:x=w-tw-15:y=h-th-15`;
+      const textFilter = buildTextWatermarkFilter(wm);
 
       args.push(
         '-vcodec', 'libwebp',
@@ -406,6 +430,24 @@ export async function makeSticker(mediaBuffer, mime = 'image/jpeg', metadata = {
     throw new Error('mediaBuffer harus berupa Buffer yang valid dan tidak kosong.');
   }
 
+  // Support makeSticker(buffer, options) signature
+  if (mime && typeof mime === 'object' && !Array.isArray(mime)) {
+    metadata = mime;
+    mime = metadata.mimetype || metadata.mime || null;
+  }
+
+  // Auto-detect MIME type from buffer headers if not explicitly specified
+  if (!mime || mime === 'image/jpeg') {
+    if (mediaBuffer.length > 8) {
+      if (mediaBuffer[0] === 0xff && mediaBuffer[1] === 0xd8) mime = 'image/jpeg';
+      else if (mediaBuffer[0] === 0x89 && mediaBuffer[1] === 0x50 && mediaBuffer[2] === 0x4e && mediaBuffer[3] === 0x47) mime = 'image/png';
+      else if (mediaBuffer.slice(0, 4).toString('ascii') === 'RIFF' && mediaBuffer.slice(8, 12).toString('ascii') === 'WEBP') mime = 'image/webp';
+      else if (mediaBuffer.slice(0, 3).toString('ascii') === 'GIF') mime = 'image/gif';
+      else if (mediaBuffer.slice(4, 8).toString('ascii') === 'ftyp') mime = 'video/mp4';
+    }
+  }
+
+  mime = mime || 'image/jpeg';
   const isAnimated = (mime && (mime.startsWith('video') || mime === 'image/gif')) || false;
   const ext = (mime ? mime.split('/')[1] : 'bin') || 'bin';
   const inputTmp = tmpFile(ext);
@@ -436,6 +478,10 @@ export async function makeSticker(mediaBuffer, mime = 'image/jpeg', metadata = {
  * Explicit helper to create a sticker with watermark and custom pack/author.
  */
 export async function createStickerWithWatermark(mediaBuffer, mime, options = {}) {
+  if (mime && typeof mime === 'object' && !Array.isArray(mime)) {
+    options = mime;
+    mime = options.mimetype || options.mime || 'image/jpeg';
+  }
   return makeSticker(mediaBuffer, mime, options);
 }
 
