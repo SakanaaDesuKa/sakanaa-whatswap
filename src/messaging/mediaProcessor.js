@@ -10,6 +10,7 @@ import { spawn } from 'child_process';
 import crypto from 'crypto';
 import webpmux from 'node-webpmux';
 import { logger as defaultLogger } from '../core/logger.js';
+import { makeSticker } from './stickerLib.js';
 
 export class MediaProcessor {
   constructor(options = {}) {
@@ -317,51 +318,32 @@ export class MediaProcessor {
 
   /**
    * Creates a WebP WhatsApp sticker with injected EXIF metadata.
-   * Scales to 512x512 keeping aspect ratio and adds transparent padding.
+   * Supports 1:1 crop or auto aspect ratio, animated tiers, and watermarks (text/image).
    * @param {Buffer|string} source - Image, GIF, or short video
-   * @param {object} [metadata={}] - { pack, author, categories }
+   * @param {object} [metadata={}] - { pack, author, categories, emojis, aspect, watermark, ... }
    * @returns {Promise<Buffer>} WebP Buffer with EXIF
    */
   async createSticker(source, metadata = {}) {
     const inputBuf = await this.toBuffer(source);
-    const inputPath = this.getTmpFilePath('input_sticker');
-    const webpPath = this.getTmpFilePath('webp');
 
-    await fs.promises.writeFile(inputPath, inputBuf);
-
-    try {
-      // Scale and pad to 512x512 with transparent background
-      await this.runProcess('ffmpeg', [
-        '-y',
-        '-i',
-        inputPath,
-        '-vf',
-        'scale=512:512:force_original_aspect_ratio=decrease,fps=15,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
-        '-loop',
-        '0',
-        '-preset',
-        'default',
-        '-an',
-        '-vsync',
-        '0',
-        webpPath,
-      ]);
-
-      const rawWebpBuffer = await fs.promises.readFile(webpPath);
-
-      // Inject EXIF using pure-JS node-webpmux
-      const img = new webpmux.Image();
-      await img.load(rawWebpBuffer);
-
-      const exifBuffer = this.createExifBuffer(metadata);
-      img.exif = exifBuffer;
-
-      const finalStickerBuffer = await img.save(null);
-      return finalStickerBuffer;
-    } finally {
-      await this.cleanupTmpFile(inputPath);
-      await this.cleanupTmpFile(webpPath);
+    let mime = metadata.mimetype || metadata.mime || 'image/jpeg';
+    if (inputBuf.length > 4) {
+      if (inputBuf[0] === 0xff && inputBuf[1] === 0xd8) mime = 'image/jpeg';
+      else if (inputBuf[0] === 0x89 && inputBuf[1] === 0x50 && inputBuf[2] === 0x4e && inputBuf[3] === 0x47) mime = 'image/png';
+      else if (inputBuf.slice(0, 4).toString('ascii') === 'RIFF' && inputBuf.slice(8, 12).toString('ascii') === 'WEBP') mime = 'image/webp';
+      else if (inputBuf.slice(0, 3).toString('ascii') === 'GIF') mime = 'image/gif';
+      else if (inputBuf.slice(4, 8).toString('ascii') === 'ftyp') mime = 'video/mp4';
     }
+
+    const pack = metadata.pack || metadata.packname || this.defaultPack;
+    const author = metadata.author || this.defaultAuthor;
+
+    return await makeSticker(inputBuf, mime, {
+      pack,
+      author,
+      emojis: metadata.categories || metadata.emojis,
+      ...metadata,
+    });
   }
 }
 

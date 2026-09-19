@@ -677,8 +677,12 @@ export class BaileysConnection extends EventEmitter {
     return this.messageBuilder.unreact(this.sock, jid, key);
   }
 
-  async editMessage(jid, key, newText) {
-    return this.messageBuilder.editMessage(this.sock, jid, key, newText);
+  async editMessage(jid, key, content, opts = {}) {
+    return this.messageBuilder.editMessage(this.sock, jid, key, content, opts);
+  }
+
+  async messageEdit(jid, key, content, opts = {}) {
+    return this.editMessage(jid, key, content, opts);
   }
 
   async deleteMessage(jid, key) {

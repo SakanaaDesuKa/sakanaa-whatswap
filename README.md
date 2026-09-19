@@ -12,12 +12,13 @@
   - [QR Code Terminal](#qr-code-terminal)
 - [Pengiriman Pesan](#-pengiriman-pesan)
   - [Pesan Teks & Media](#pesan-teks--media)
-  - [Stiker & Antrean Stiker](#stiker--antrean-stiker)
+  - [Stiker, Watermark, & Antrean Stiker](#stiker-watermark--antrean-stiker)
+  - [Pesan Interaktif (`AIRich`, `Button`, `Carousel`)](#-pesan-interaktif-airich-button-carousel)
   - [Album Media (`sendAlbum`)](#album-media-sendalbum)
   - [Third-Party Sticker Pack (`sendStickerPack`)](#third-party-sticker-pack-sendstickerpack)
   - [Dokumen, Polling, & Kontak](#dokumen-polling--kontak)
 - [Aksi Pesan & Chat](#-aksi-pesan--chat)
-  - [Reaksi, Edit, & Hapus Pesan](#reaksi-edit--hapus-pesan)
+  - [Reaksi, Edit Pesan (Teks & Media), & Hapus Pesan](#reaksi-edit-pesan-teks--media--hapus-pesan)
   - [Pin, Star, Mute, & Archive](#pin-star-mute--archive)
 - [Resolusi Identitas (LID ↔ PN)](#-resolusi-identitas-lid--pn)
 - [Manajemen Grup](#-manajemen-grup)
@@ -117,21 +118,104 @@ await client.sendVoice(jid, './rekaman.mp3');
 await client.sendAudio(jid, './lagu.mp3');
 ```
 
-### Stiker & Antrean Stiker
+### Stiker, Watermark, & Antrean Stiker
+
+`sakanaa-whatswap` dilengkapi engine pembuatan stiker tingkat lanjut (`stickerLib`) berbasis FFmpeg murni dan `node-webpmux`. Mendukung stiker gambar statis, animasi (video/GIF) dengan kompresi bertingkat otomatis (<500 KB), rasio aspek kustom (`1:1` atau `auto`), dan *watermark* dinamis (teks atau gambar transparan).
 
 ```javascript
-// Kirim Stiker WebP dengan metadata EXIF (packname & author)
-await client.sendSticker(jid, './gambar.png', {
+// 1. Stiker 1:1 standar dengan custom pack & author
+await client.sendSticker(jid, './gambar.jpg', {
   pack: 'My Sticker Pack',
-  author: 'Sakanaa Bot'
+  author: 'Sakanaa Bot',
+  aspect: '1:1', // Default: potong/crop center ke rasio 1:1
 });
 
-// Kirim beberapa stiker berurutan dengan jeda aman
+// 2. Stiker rasio asli ("auto" / apa adanya, misal 9:16 atau 4:3)
+await client.sendSticker(jid, './story_9_16.jpg', {
+  pack: 'Sakanaa Pack',
+  author: 'Sakanaa Bot',
+  aspect: 'auto', // Mempertahankan rasio aspek gambar apa adanya tanpa pemotongan paksa
+});
+
+// 3. Stiker dengan Watermark Teks (tepat di pojok kanan bawah kecil)
+// Catatan: Gambar dipotong (crop) terlebih dahulu sebelum kanvas watermark diterapkan
+await client.sendSticker(jid, './foto.png', {
+  pack: 'Sakanaa Pack',
+  author: 'Sakanaa Bot',
+  aspect: '1:1',
+  watermark: {
+    type: 'text',
+    text: 'SakanaaBot',
+    opacity: 0.85, // Transparansi halus
+    color: 'white',
+  },
+});
+
+// 4. Stiker dengan Watermark Gambar / Logo (dengan opacity transparan di pojok kanan bawah)
+await client.sendSticker(jid, './foto.png', {
+  pack: 'Sakanaa Pack',
+  author: 'Sakanaa Bot',
+  watermark: {
+    type: 'image',
+    image: './logo.png', // Buffer atau path lokal gambar watermark
+    opacity: 0.6, // Transparansi sedikit transparan
+    width: 70, // Ukuran kecil pas di pojok
+  },
+});
+
+// 5. Stiker Animasi (Video MP4 / GIF) — Otomatis kompresi bitrate/fps agar <500 KB
+await client.sendSticker(jid, './klip.mp4', {
+  pack: 'Animated Pack',
+  author: 'Sakanaa Bot',
+});
+
+// 6. Buat Buffer Stiker Langsung (Tanpa Kirim Chat)
+import { makeSticker, createStickerWithWatermark } from 'sakanaa-whatswap';
+
+const stickerBuffer = await makeSticker(mediaBuffer, 'image/png', {
+  pack: 'Koleksi Saya',
+  author: 'Nama Bot',
+  aspect: '1:1',
+  watermarkText: 'NamaWatermark',
+});
+
+// 7. Kirim beberapa stiker berurutan dengan jeda aman
 await client.sendPackSticker(jid, [
   './stiker1.webp',
   './stiker2.webp'
 ]);
 ```
+
+### 📱 Pesan Interaktif (`AIRich`, `Button`, `Carousel`)
+
+Mendukung pembuatan tampilan antarmuka WhatsApp kaya menggunakan class builder `AIRich`, `Button`, `ButtonV2`, dan `Carousel`:
+
+```javascript
+import { AIRich, Button, Carousel } from 'sakanaa-whatswap';
+
+// Contoh pesan kaya interaktif dengan pembaruan live (sendEdit)
+const rich = new AIRich(client.sock)
+  .setTitle('Menu Interaktif')
+  .addText('Halo! Pilih layanan yang Anda butuhkan:')
+  .setFooter('Dibuat dengan Sakanaa-Whatswap');
+
+// Kirim pesan awal
+const sent = await rich.send(jid);
+
+// Perbarui pesan secara dinamis (live edit)
+rich.addText('Berikut daftar pilihan terbaru:', { id: 'daftar' });
+rich.addSuggest(['Menu 1', 'Menu 2', 'Bantuan']);
+await rich.sendEdit();
+
+// Contoh Tombol Aksi (Button Builder)
+const btn = new Button(client.sock)
+  .setBody('Silakan klik tombol di bawah:')
+  .addReply('Mulai Sekarang', 'btn_start')
+  .addCall('Hubungi CS', '6281234567890');
+await btn.send(jid);
+```
+
+> 📖 **Panduan Contoh Lengkap:** Lihat [Panduan Message Builder](docs/MESSAGE_BUILDER.md) untuk demonstrasi lengkap tur interaktif, *placeholder loading*, blok kode syntax highlighting, tabel data, widget, dan kartu carousel.
 
 ### Album Media (`sendAlbum`)
 > Fitur ekstensi khusus: Mengirim beberapa gambar dan video dalam satu pesan album WhatsApp.
@@ -185,19 +269,33 @@ await client.sendContact(jid, {
 
 ## 🎯 Aksi Pesan & Chat
 
-### Reaksi, Edit, & Hapus Pesan
+### Reaksi, Edit Pesan (Teks & Media), & Hapus Pesan
+
+`editMessage` (dan aliasnya `messageEdit`) mendukung pengeditan pesan teks biasa maupun pesan media (gambar, video) beserta keterangan (*caption*).
 
 ```javascript
-// Beri Reaksi Emoji
+// 1. Beri Reaksi Emoji & Hapus Reaksi
 await client.react(jid, m.key, '👍');
-
-// Hapus Reaksi
 await client.unreact(jid, m.key);
 
-// Edit Pesan Terkirim
-await client.editMessage(jid, m.key, 'Teks telah diperbarui');
+// 2. Edit Pesan Teks Biasa
+await client.editMessage(jid, m.key, 'Teks telah diperbarui.');
 
-// Hapus Pesan untuk Semua Orang (Revoke)
+// 3. Edit Pesan Media (Perbarui Gambar & Caption Sekaligus)
+await client.editMessage(jid, m.key, {
+  image: './gambar_baru.jpg',
+  caption: 'Keterangan gambar yang telah diedit'
+});
+
+// 4. Edit Caption / Keterangan Pesan
+await client.editMessage(jid, m.key, {
+  caption: 'Hanya memperbarui teks keterangan'
+});
+
+// 5. Menggunakan Alias messageEdit
+await client.messageEdit(jid, m.key, 'Teks via alias messageEdit');
+
+// 6. Hapus Pesan untuk Semua Orang (Revoke)
 await client.deleteMessage(jid, m.key);
 ```
 

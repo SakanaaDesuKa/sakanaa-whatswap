@@ -53,6 +53,24 @@ import {
   generateMessageID,
 } from '@whiskeysockets/baileys';
 
+import {
+  Button,
+  ButtonV2,
+  Carousel,
+  AIRich,
+  Toolkit,
+  VERSION as interactiveVersion,
+} from './src/builder/MessageBuilder.js';
+
+import {
+  makeSticker,
+  createStickerWithWatermark,
+  buildExifBuffer,
+  injectExif,
+  writeExif,
+  stickerLib,
+} from './src/messaging/stickerLib.js';
+
 export {
   // Core
   BaileysConnection,
@@ -70,6 +88,22 @@ export {
   mediaProcessor,
   RateLimiter,
   rateLimiter,
+
+  // Interactive Message Builder (MessageBuilder 4.7)
+  Button,
+  ButtonV2,
+  Carousel,
+  AIRich,
+  Toolkit,
+  interactiveVersion,
+
+  // Sticker Engine & Watermark (stickerLib)
+  makeSticker,
+  createStickerWithWatermark,
+  buildExifBuffer,
+  injectExif,
+  writeExif,
+  stickerLib,
 
   // Identity & JID
   LidPnResolver,

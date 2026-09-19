@@ -556,17 +556,64 @@ export class MessageBuilder {
   }
 
   /**
-   * Edit an existing sent message.
+   * Edit an existing sent message (supports text, media like image/video with caption, or caption updates).
    * @param {object} sock
    * @param {string} jid
-   * @param {object} key
-   * @param {string} newText
+   * @param {object} key - Target message key { id, remoteJid, fromMe, participant }
+   * @param {string|object} content - New text string OR content object { text, caption, image, video, ... }
+   * @param {object} [opts={}]
    */
-  async editMessage(sock, jid, key, newText) {
-    return this._sendWithLimit(sock, jid, {
-      text: newText,
-      edit: key,
-    });
+  async editMessage(sock, jid, key, content, opts = {}) {
+    if (!key || !key.id) {
+      throw new Error('Key pesan yang akan diedit wajib disertakan (memiliki id).');
+    }
+
+    let payload = {};
+
+    if (typeof content === 'string') {
+      payload = {
+        text: content,
+        edit: key,
+      };
+    } else if (content && typeof content === 'object') {
+      const editContent = { ...content };
+
+      // Handle media if provided as string path or URL
+      if (editContent.image && typeof editContent.image === 'string') {
+        editContent.image = await this.mediaProcessor.toBuffer(editContent.image);
+      }
+      if (editContent.video && typeof editContent.video === 'string') {
+        const processed = await this.mediaProcessor.processVideo(editContent.video);
+        editContent.video = processed.buffer;
+        editContent.mimetype = processed.mimetype || editContent.mimetype || 'video/mp4';
+      }
+      if (editContent.audio && typeof editContent.audio === 'string') {
+        editContent.audio = await this.mediaProcessor.toBuffer(editContent.audio);
+      }
+      if (editContent.document && typeof editContent.document === 'string') {
+        editContent.document = await this.mediaProcessor.toBuffer(editContent.document);
+      }
+
+      // If only caption is provided without explicit media or text, map caption to text so Baileys does not fail
+      if (editContent.caption && !editContent.text && !editContent.image && !editContent.video && !editContent.audio && !editContent.document) {
+        editContent.text = editContent.caption;
+      }
+
+      payload = {
+        ...editContent,
+        edit: key,
+        ...opts.contentOptions,
+      };
+    } else {
+      throw new Error('Konten edit pesan harus berupa string atau object.');
+    }
+
+    return this._sendWithLimit(sock, jid, payload, opts);
+  }
+
+  // Alias for editMessage
+  async messageEdit(sock, jid, key, content, opts = {}) {
+    return this.editMessage(sock, jid, key, content, opts);
   }
 
   /**
