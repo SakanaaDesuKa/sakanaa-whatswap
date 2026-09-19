@@ -691,6 +691,35 @@ export class MessageBuilder {
   }
 
   /**
+   * Send an interactive HTML Webview message directly inside WhatsApp.
+   * Renders interactive HTML/CSS/JS without download security warnings.
+   *
+   * @param {object} sock - Baileys socket instance
+   * @param {string} jid - Recipient JID
+   * @param {string} htmlPayload - Full HTML/CSS/JS content
+   * @param {object} [options={}] - { title, quoted, ... }
+   */
+  async sendWebview(sock, jid, htmlPayload, options = {}) {
+    const { AIRich } = await import('../builder/MessageBuilder.js');
+    const { title = 'Interactive View', quoted = null, ...opts } = options;
+    const rich = new AIRich(sock, { unsupportedTypeAlert: false });
+
+    if (title) rich.setTitle(title);
+    rich.addHtml(htmlPayload);
+
+    return await rich.send(jid, {
+      quoted,
+      bypassDownload: false,
+      forwarded: true,
+      ...opts,
+    });
+  }
+
+  async sendWebView(sock, jid, htmlPayload, options = {}) {
+    return this.sendWebview(sock, jid, htmlPayload, options);
+  }
+
+  /**
    * Delete message for everyone.
    * @param {object} sock
    * @param {string} jid

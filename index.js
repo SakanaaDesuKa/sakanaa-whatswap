@@ -72,6 +72,19 @@ import {
   stickerLib,
 } from './src/messaging/stickerLib.js';
 
+/**
+ * Mengirim pesan HTML Webview Interaktif langsung ke WhatsApp tanpa memicu peringatan unduh.
+ * @param {object} sock - Instance Baileys Socket
+ * @param {string} jid - Target chat JID
+ * @param {string} htmlPayload - Kode HTML/CSS/JS lengkap
+ * @param {object} [options={}] - { title, quoted, ... }
+ */
+async function sendWebview(sock, jid, htmlPayload, options = {}) {
+  return messageBuilder.sendWebview(sock, jid, htmlPayload, options);
+}
+
+const sendWebView = sendWebview;
+
 export {
   // Core
   BaileysConnection,
@@ -90,7 +103,7 @@ export {
   RateLimiter,
   rateLimiter,
 
-  // Interactive Message Builder (MessageBuilder 4.7)
+  // Interactive Message Builder (MessageBuilder 4.7) & HTML Webview
   Button,
   ButtonV2,
   Carousel,
@@ -98,6 +111,8 @@ export {
   Toolkit,
   VERSION,
   interactiveVersion,
+  sendWebview,
+  sendWebView,
 
   // Sticker Engine & Watermark (stickerLib)
   makeSticker,

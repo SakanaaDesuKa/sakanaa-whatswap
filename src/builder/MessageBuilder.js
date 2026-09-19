@@ -1359,6 +1359,14 @@ class AIRich extends BaseBuilder {
 		});
 	}
 
+	addWebView(htmlPayload, options = {}) {
+		return this.addHtml(htmlPayload, options);
+	}
+
+	addWebview(htmlPayload, options = {}) {
+		return this.addHtml(htmlPayload, options);
+	}
+
 
 	addText(text, { hyperlink = true, citation = true, latex = true, id, replace, insertAt } = {}) {
 		if (typeof text !== 'string') {

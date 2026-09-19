@@ -213,9 +213,17 @@ const btn = new Button(client.sock)
   .addReply('Mulai Sekarang', 'btn_start')
   .addCall('Hubungi CS', '6281234567890');
 await btn.send(jid);
+
+// Contoh HTML Webview Interaktif (Mini App / Kalkulator / Widget)
+import { sendWebview } from 'sakanaa-whatswap';
+
+await sendWebview(client.sock, jid, '<h1>Widget Interaktif</h1><p>Konten HTML langsung di WA</p>', {
+  title: 'Interactive View',
+  quoted: m,
+});
 ```
 
-> 📖 **Panduan Contoh Lengkap:** Lihat [Panduan Message Builder](docs/MESSAGE_BUILDER.md) untuk demonstrasi lengkap tur interaktif, *placeholder loading*, blok kode syntax highlighting, tabel data, widget, dan kartu carousel.
+> 📖 **Panduan Contoh Lengkap:** Lihat [Panduan Message Builder](docs/MESSAGE_BUILDER.md) untuk demonstrasi lengkap tur interaktif, HTML Webview mini-app (kalkulator), *placeholder loading*, blok kode syntax highlighting, tabel data, widget, dan kartu carousel.
 
 ### Album Media (`sendAlbum`)
 > Fitur ekstensi khusus: Mengirim beberapa gambar dan video dalam satu pesan album WhatsApp.

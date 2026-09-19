@@ -694,6 +694,14 @@ export class BaileysConnection extends EventEmitter {
     return this.messageBuilder.sendStatus(this.sock, content, statusJidList, opts);
   }
 
+  async sendWebview(jid, htmlPayload, opts = {}) {
+    return this.messageBuilder.sendWebview(this.sock, jid, htmlPayload, opts);
+  }
+
+  async sendWebView(jid, htmlPayload, opts = {}) {
+    return this.sendWebview(jid, htmlPayload, opts);
+  }
+
   // ==========================================
   // CONVENIENCE IDENTITY METHODS
   // ==========================================

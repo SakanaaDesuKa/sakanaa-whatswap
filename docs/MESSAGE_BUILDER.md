@@ -409,3 +409,92 @@ carousel.addCard([
 
 await carousel.send(jid);
 ```
+
+---
+
+## 🌐 HTML Webview Interaktif (`addWebView` & `sendWebview`)
+
+`sakanaa-whatswap` mendukung tampilan **HTML Webview Interaktif** langsung di dalam obrolan WhatsApp tanpa memicu pesan peringatan unduhan file (*download warning*). Fitur ini memungkinkan pembuatan antarmuka mini-app seperti kalkulator interaktif, dashboard, formulir, atau widget berbasis HTML/CSS/JS.
+
+### 1. Menggunakan Helper Praktis `sendWebview`
+
+```javascript
+import { sendWebview } from 'sakanaa-whatswap';
+
+// Atau melalui instance BaileysConnection:
+// await client.sendWebview(jid, htmlContent, { title: 'Kalkulator', quoted: m });
+
+const htmlKalkulator = `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; background: #1a1a2e; font-family: sans-serif; color: #fff; padding: 15px; }
+    .calc { max-width: 320px; margin: auto; background: rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; backdrop-filter: blur(10px); }
+    .screen { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 15px; font-size: 24px; text-align: right; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    button { padding: 12px; font-size: 18px; border: none; border-radius: 8px; background: rgba(255,255,255,0.15); color: #fff; cursor: pointer; }
+    button:active { background: rgba(255,255,255,0.3); }
+    button.op { background: #e94560; }
+  </style>
+</head>
+<body>
+  <div class="calc">
+    <div class="screen" id="disp">0</div>
+    <div class="grid">
+      <button onclick="clearDisp()">C</button>
+      <button onclick="press('/')">/</button>
+      <button onclick="press('*')">×</button>
+      <button onclick="del()">⌫</button>
+      <button onclick="press('7')">7</button>
+      <button onclick="press('8')">8</button>
+      <button onclick="press('9')">9</button>
+      <button class="op" onclick="press('-')">-</button>
+      <button onclick="press('4')">4</button>
+      <button onclick="press('5')">5</button>
+      <button onclick="press('6')">6</button>
+      <button class="op" onclick="press('+')">+</button>
+      <button onclick="press('1')">1</button>
+      <button onclick="press('2')">2</button>
+      <button onclick="press('3')">3</button>
+      <button class="op" onclick="calc()">=</button>
+      <button onclick="press('0')" style="grid-column: span 2;">0</button>
+      <button onclick="press('.')">.</button>
+    </div>
+  </div>
+  <script>
+    let val = '0';
+    function update() { document.getElementById('disp').innerText = val; }
+    function press(k) { if(val === '0' && k !== '.') val = k; else val += k; update(); }
+    function clearDisp() { val = '0'; update(); }
+    function del() { val = val.length > 1 ? val.slice(0,-1) : '0'; update(); }
+    function calc() { try { val = String(eval(val)); } catch { val = 'Error'; } update(); }
+  </script>
+</body>
+</html>`;
+
+await sendWebview(client.sock, jid, htmlKalkulator, {
+  title: 'Kalkulator Interaktif Sakanaa',
+  quoted: m,
+});
+```
+
+### 2. Menggunakan `AIRich` Builder (`addWebView` / `addHtml`)
+
+```javascript
+import { AIRich } from 'sakanaa-whatswap';
+
+const rich = new AIRich(client.sock, { unsupportedTypeAlert: false })
+  .setTitle('Widget Webview')
+  .addWebView('<h2>Widget Interaktif</h2><p>Dibuat langsung di dalam pesan WhatsApp!</p>')
+  .setFooter('Sakanaa Interactive Engine');
+
+// bypassDownload: false WAJIB agar tidak memicu pesan peringatan unduhan
+await rich.send(jid, {
+  quoted: m,
+  bypassDownload: false,
+  forwarded: true,
+});
+```
+
